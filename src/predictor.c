@@ -25,7 +25,7 @@ const char *bpName[4] = { "Static", "Gshare",
                           "Tournament", "Custom" };
 
 uint32_t gBHSR;
-uint8_t *gshareBHT;
+int *gshareBHT;
 
 int ghistoryBits; // Number of bits used for Global History
 int lhistoryBits; // Number of bits used for Local History
@@ -45,17 +45,12 @@ int verbose;
 //------------------------------------//
 //        Predictor Functions         //
 uint8_t make_gshare_prediction(uint32_t pc){
-	uint32_t index;
-	index = (gBHSR ^ pc) & ((1<<ghistoryBits)-1) ;
+	uint32_t index = (gBHSR ^ pc) & ((1<<ghistoryBits)-1) ;
 	uint8_t gPrediction = gshareBHT[index];
-	uint8_t outcome;
 	if (gPrediction == SN || gPrediction == WN) {
-		outcome = NOTTAKEN;
+		return NOTTAKEN;
 	}
-	else{
-		outcome = TAKEN;
-	}
-	return outcome;
+	return TAKEN;
 }
 //------------------------------------//
 
@@ -73,9 +68,10 @@ init_predictor()
 		//initialize gBHSR
 		gBHSR = 0;
 		// initialize gshareBHT
-		size_t BHTsize = (1<<ghistoryBits)*sizeof(uint8_t);
-		gshareBHT = (uint8_t *)malloc(BHTsize);
+		size_t BHTsize = (1<<ghistoryBits)*sizeof(int);
+		gshareBHT = (int *)malloc(BHTsize);
 		memset(gshareBHT, WN, BHTsize);
+		//printf ("%s%d\n", "after",gshareBHT[1]);
 		break;
 
     case TOURNAMENT:
@@ -126,12 +122,12 @@ train_predictor(uint32_t pc, uint8_t outcome)
     case STATIC:
       return ;
     case GSHARE:
-		//update gBHSR
-		gBHSR <<= 1;
-		gBHSR += 1;
 		// update gshareBHT (shift register)
-		uint8_t index = (gBHSR ^ pc) & ((1<<ghistoryBits)-1) ;
-		uint8_t gPrediction = gshareBHT[index];
+		;
+		int index;
+		index = (gBHSR ^ pc) & ((1<<ghistoryBits)-1) ;
+		uint8_t gPrediction = gshareBHT[(gBHSR ^ pc) & ((1<<ghistoryBits)-1)];
+		
 		if(outcome==NOTTAKEN){
 			if(gPrediction != SN){
 				gshareBHT[index]--;
@@ -142,6 +138,11 @@ train_predictor(uint32_t pc, uint8_t outcome)
 				gshareBHT[index]++;
 			}
 		}
+		
+		//update gBHSR
+		gBHSR <<= 1;
+		gBHSR |= outcome;
+
 		break;
 
     case TOURNAMENT:
