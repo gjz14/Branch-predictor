@@ -6,14 +6,15 @@
 //  described in the README                               //
 //========================================================//
 #include <stdio.h>
+#include <string.h>
 #include "predictor.h"
 
 //
 // TODO:Student Information
 //
-const char *studentName = "NAME";
-const char *studentID   = "PID";
-const char *email       = "EMAIL";
+const char *studentName = "Jiazhou Gao, Rui Yang";
+const char *studentID   = "A53278947, ";
+const char *email       = "j7gao@eng.ucsd.edu, ";
 
 //------------------------------------//
 //      Predictor Configuration       //
@@ -22,6 +23,9 @@ const char *email       = "EMAIL";
 // Handy Global for use in output routines
 const char *bpName[4] = { "Static", "Gshare",
                           "Tournament", "Custom" };
+
+uint32_t gBHSR;
+uint8_t *gshareBHT;
 
 int ghistoryBits; // Number of bits used for Global History
 int lhistoryBits; // Number of bits used for Local History
@@ -40,6 +44,19 @@ int verbose;
 
 //------------------------------------//
 //        Predictor Functions         //
+uint8_t make_gshare_prediction(uint32_t pc){
+	uint32_t index;
+	index = (gBHSR ^ pc) & ((1<<ghistoryBits)-1) ;
+	uint8_t gPrediction = gshareBHT[index];
+	uint8_t outcome;
+	if (gPrediction == SN || gPrediction == WN) {
+		outcome = NOTTAKEN;
+	}
+	else{
+		outcome = TAKEN;
+	}
+	return outcome;
+}
 //------------------------------------//
 
 // Initialize the predictor
@@ -49,6 +66,23 @@ init_predictor()
 {
   //
   //TODO: Initialize Branch Predictor Data Structures
+  switch (bpType) {
+    case STATIC:
+      return;
+    case GSHARE:
+		//initialize gBHSR
+		gBHSR = 0;
+		// initialize gshareBHT
+		size_t BHTsize = (1<<ghistoryBits)*sizeof(uint8_t);
+		gshareBHT = (uint8_t *)malloc(BHTsize);
+		memset(gshareBHT, WN, BHTsize);
+		break;
+
+    case TOURNAMENT:
+    case CUSTOM:
+    default:
+      break;
+  }
   //
 }
 
@@ -68,6 +102,7 @@ make_prediction(uint32_t pc)
     case STATIC:
       return TAKEN;
     case GSHARE:
+		return make_gshare_prediction(pc);
     case TOURNAMENT:
     case CUSTOM:
     default:
@@ -87,5 +122,32 @@ train_predictor(uint32_t pc, uint8_t outcome)
 {
   //
   //TODO: Implement Predictor training
+  switch (bpType) {
+    case STATIC:
+      return ;
+    case GSHARE:
+		//update gBHSR
+		gBHSR <<= 1;
+		gBHSR += 1;
+		// update gshareBHT (shift register)
+		uint8_t index = (gBHSR ^ pc) & ((1<<ghistoryBits)-1) ;
+		uint8_t gPrediction = gshareBHT[index];
+		if(outcome==NOTTAKEN){
+			if(gPrediction != SN){
+				gshareBHT[index]--;
+			}
+		}
+		else{
+			if(gPrediction != ST){
+				gshareBHT[index]++;
+			}
+		}
+		break;
+
+    case TOURNAMENT:
+    case CUSTOM:
+    default:
+      break;
+  }
   //
 }
