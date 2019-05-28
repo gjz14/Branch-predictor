@@ -14,7 +14,7 @@
 //
 const char *studentName = "Jiazhou Gao, Rui Yang";
 const char *studentID   = "A53278947, ";
-const char *email       = "j7gao@eng.ucsd.edu, ";
+const char *email       = "j7gao@eng.ucsd.edu, r3yang@eng.ucsd.edu ";
 
 //------------------------------------//
 //      Predictor Configuration       //
@@ -26,6 +26,9 @@ const char *bpName[4] = { "Static", "Gshare",
 
 uint32_t gBHSR;
 int *gshareBHT;
+int *localHT;    // pcIndexBits
+int *lshareBHT;  // lhistoryBits
+int *choicePredictor; // taken means global, not taken means local
 
 int ghistoryBits; // Number of bits used for Global History
 int lhistoryBits; // Number of bits used for Local History
@@ -52,6 +55,34 @@ uint8_t make_gshare_prediction(uint32_t pc){
 	}
 	return TAKEN;
 }
+
+uint8_t make_tourna_prediction(uint32_t pc){
+	uint32_t index_global = gBHSR & ((1<<ghistoryBits)-1);
+	uint8_t choice = choicePredictor[index_global];
+	if (choice == SN || choice == WN){
+		// not taken, choose local
+		uint32_t local_history = localHT[pc & ((1<<pcIndexBits)-1)];
+		uint32_t index_local = local_history & ((1<<lhistoryBits)-1);
+		uint8_t lPrediction = lshareBHT[index_local];
+		if (lPrediction == SN || lPrediction == WN) {
+			return NOTTAKEN;
+		}
+		return TAKEN;
+
+		uint8_t gPrediction = gshareBHT[index_global];
+		if (gPrediction == SN || gPrediction == WN) {
+			return NOTTAKEN;
+		}
+		return TAKEN;
+	}else{
+		// taken, choose global
+		uint8_t gPrediction = gshareBHT[index_global];
+		if (gPrediction == SN || gPrediction == WN) {
+			return NOTTAKEN;
+		}
+		return TAKEN;
+	}
+}
 //------------------------------------//
 
 // Initialize the predictor
@@ -75,6 +106,21 @@ init_predictor()
 		break;
 
     case TOURNAMENT:
+    	gBHSR = 0;
+    	size_t gBHTsize = (1<<ghistoryBits)*sizeof(int);
+    	gshareBHT = (int *)malloc(gBHTsize);
+    	choicePredictor = (int *)malloc(gBHTsize);
+		memset(gshareBHT, WN, gBHTsize);
+		memset(choicePredictor, WT, gBHTsize);
+
+
+		size_t localhis_size = (1<<pcIndexBits)*sizeof(int);
+		localHT = (int *)malloc(localhis_size);
+		memset(localHT,0,localhis_size);
+
+		size_t lBHTsize = (1<<lhistoryBits)*sizeof(int);
+		lshareBHT = (int *)malloc(lBHTsize);
+		memset(lshareBHT,WN,lBHTsize);
     case CUSTOM:
     default:
       break;
@@ -100,6 +146,7 @@ make_prediction(uint32_t pc)
     case GSHARE:
 		return make_gshare_prediction(pc);
     case TOURNAMENT:
+    	return make_tourna_prediction(pc);
     case CUSTOM:
     default:
       break;
@@ -146,6 +193,70 @@ train_predictor(uint32_t pc, uint8_t outcome)
 		break;
 
     case TOURNAMENT:
+    	;
+    	
+		int local_history = localHT[pc & ((1<<pcIndexBits)-1)];
+		int index_local = local_history & ((1<<lhistoryBits)-1);
+
+    	// update choice predictor, BHT(global or local)
+    	
+    	int index_global = gBHSR & ((1<<ghistoryBits)-1);
+
+    	uint8_t choice = choicePredictor[index_global];
+    	uint8_t gprediction = gshareBHT[index_global];
+    	uint8_t lprediction = lshareBHT[index_local];
+    	uint8_t prediction;
+    	if (choice == SN || choice == WN){
+    		prediction = lprediction;
+    	}else{
+    		prediction = gprediction;
+    	}
+
+
+    	if(outcome==NOTTAKEN){
+			if(lprediction != SN){
+				lshareBHT[index_local]--;
+			}
+			if(gprediction != SN){
+				gshareBHT[index_global]--;
+
+			}
+			if((gprediction == SN || gprediction == WN) && (lprediction == ST || lprediction == WT)){
+				if(choice!=ST){
+					choicePredictor[index_global]++;
+				}
+			}else if((lprediction == SN || lprediction == WN) && (gprediction == ST || gprediction == WT)){
+				if(choice != SN){
+					choicePredictor[index_global]--;
+				}
+			}
+		}
+		else{
+			if(lprediction != ST){
+				lshareBHT[index_local]++;
+			}
+			if(gprediction != ST){
+				gshareBHT[index_global]++;
+			}
+			if((lprediction == SN || lprediction == WN) && (gprediction == ST || gprediction == WT)){
+				if(choice != ST){
+					choicePredictor[index_global]++;
+				}			
+			}else if((gprediction == SN || gprediction == WN) && (lprediction == ST || lprediction == WT)){
+				if(choice != SN){
+					choicePredictor[index_global]--;
+				}			
+			}
+		}
+
+		//update global history
+    	gBHSR <<= 1;
+		gBHSR |= outcome;
+    	
+    	// update local history
+    	localHT[pc & ((1<<pcIndexBits)-1)] <<= 1;
+    	localHT[pc & ((1<<pcIndexBits)-1)] |= outcome;
+
     case CUSTOM:
     default:
       break;
