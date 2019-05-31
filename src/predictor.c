@@ -8,7 +8,8 @@
 #include <stdio.h>
 #include <string.h>
 #include "predictor.h"
-
+#include "tage.h"
+#include "percptron.h"
 //
 // TODO:Student Information
 //
@@ -121,7 +122,10 @@ init_predictor()
 		size_t lBHTsize = (1<<lhistoryBits)*sizeof(int);
 		lshareBHT = (int *)malloc(lBHTsize);
 		memset(lshareBHT,WN,lBHTsize);
+		break;
     case CUSTOM:
+		init_perceptron();
+		break;
     default:
       break;
   }
@@ -148,6 +152,7 @@ make_prediction(uint32_t pc)
     case TOURNAMENT:
     	return make_tourna_prediction(pc);
     case CUSTOM:
+		return make_perceptron_prediction(pc);
     default:
       break;
   }
@@ -258,6 +263,9 @@ train_predictor(uint32_t pc, uint8_t outcome)
     	localHT[pc & ((1<<pcIndexBits)-1)] |= outcome;
 
     case CUSTOM:
+		;
+
+		train_perceptron(pc, outcome);
     default:
       break;
   }
