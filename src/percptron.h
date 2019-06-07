@@ -3,10 +3,13 @@
 #include <math.h>
 #include "predictor.h"
 
-// Data for perceptron predictor
 
-#define p_NUM 427
+// perceptron number
+#define p_NUM 512
+//bits of history 
 #define p_HistorySize 19
+
+ // The number of bits each weight can use.
 #define p_WeightSize 8
 
 #define p_MASK_PC(x) ((x * p_HistorySize) % p_NUM)
